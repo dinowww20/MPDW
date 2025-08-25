@@ -1,1 +1,43 @@
+### LATIHAN MPDW
 
+## BACA DATA
+
+```{r}
+library (readxl)
+
+cs <- read_excel("D:/KULIAH/SEM 5/MPDW/Coffee Shop Sales.xlsx")
+```
+
+```{r}
+head(cs)
+```
+
+## PRODUK KOPI
+
+```{r}
+library(dplyr)
+
+category <- "Coffee"
+
+perday <- cs %>%
+  filter(product_category == category) %>%
+  group_by(transaction_date) %>%
+  summarise(total_sales = sum(transaction_qty, na.rm = TRUE))
+
+print(perday)
+
+```
+
+## LINECHART
+
+```{r}
+library(ggplot2)
+
+ggplot(perday, aes(x = transaction_date, y = total_sales)) +
+  geom_line(color = "blue") +
+  geom_point() +
+  theme_minimal() +
+  labs(title = paste("Penjualan Harian", category),
+       x = "Tanggal", y = "Total Penjualan")
+
+```
