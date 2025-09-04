@@ -1,0 +1,167 @@
+---
+title: "Tugas MPDW Kuliah Pertemuan 2"
+author: "Daffa Kyanfaiza G1401231078"
+date: "2025-08-29"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: united
+---
+
+# Load Dataset
+
+```{r}
+library(readxl)
+library(lmtest)
+```
+
+```{r}
+gt <- read_xlsx("C:/Users/daffa/Downloads/GORONTALO.xlsx")
+gt
+```
+
+Data terdiri dari 2 peubah yaitu peubah Tahun dan Peubah IPM, Data ini merupakan data IPM di Provinsi Gorontalo pada tahun 2010-2024
+
+# Eksplorasi Data
+
+## Plot IPM vs Tahun
+
+```{r}
+plot(gt$Tahun, gt$IPM, type = "b",  
+     pch = 19, col = "red",        
+     xlab = "Tahun",  ylab = "IPM", 
+     main = "Plot IPM vs Tahun Provinsi Gorontalo")
+
+```
+
+Berdasarkan grafik terlihat jelas bahwa (IPM) di provinsi Gorontalo menunjukkan tren peningkatan yang konsisten dan cukup mulus dari tahun ke tahun.
+
+Pola kenaikan yang stabil ini memberikan indikasi kuat adanya autokorelasi positif. Artinya, nilai IPM pada suatu tahun sangat dipengaruhi oleh nilai IPM pada tahun sebelumnya. Dengan kata lain, data dari satu periode memiliki hubungan yang erat dengan data pada periode selanjutnya.
+
+Meskipun secara visual indikasinya sudah kuat, untuk membuktikan hubungan ini secara statistik, diperlukan pengujian lebih lanjut dengan memeriksa residual ACF (Fungsi Autokorelasi) atau menggunakan metode formal seperti uji Durbin-Watson.
+
+## Model Linear OLS
+
+```{r}
+model <- lm(formula = IPM ~ Tahun, data = gt)
+summary(model)
+```
+
+didapatkan R-Squared yang sangat tinggi yaitu 0.9927 yang mengindikasikan Adanya hubungan sangat kuat dan signifikan antara peubah Tahun dan IPM. selain itu, model juga menghasilkan informasi bahwa IPM rata-rata naik sekitar 0.587 poin setiap kenaikan tahun
+
+# Uji Autokorelasi
+
+## ACF dan PACF
+
+```{r}
+resid_model <- residuals(model)
+acf(resid_model, main = "ACF Residuals")
+```
+
+```{r}
+pacf(resid_model, main = "PACF Residuals")
+```
+
+Hasil plot ACF menunjukkan bahwa terdapat batang yang melewati batas signifikan yaitu pada lag 0. Namun pada PACF tidak ada batang yang melewati batas signifikan. Sehingga untuk memastikan kita perlu melakukan uji formal berupa uji durbin-watson
+
+## Uji Formal Durbin-Watson
+
+-   $H_0$: Tidak ada autokorelasi pada residual ($\rho = 0$)\
+-   $H_1$: Ada autokorelasi pada residual ($\rho \neq 0$)
+
+```{r}
+dwtest(model)
+```
+
+Berdasarkan uji Durbin–Watson, didapatkan p-value sebesar 0.03741 < 0.05, yang artinya tolak H0. Hal ini menunjukkan bahwa terdapat autokorelasi pada residual model regresi, sehingga asumsi independensi residual tidak terpenuhi dan harus dilakukan penanganan Autokorelasi.
+
+# Penanganan Autokorelasi
+
+## Cochrane-Orcutt
+
+```{r}
+library(orcutt)
+```
+
+
+```{r}
+cochrane.orcutt(model)
+```
+
+Setelah dilakukan transformasi dengan metode Cochrane-Orcutt, p-value meningkat dari yang sebelumnya 0.03741 menjadi 0.09403 dimana > 0.05, sehingga dapat disimpulkan bahwa masalah autokorelasi telah tertangani.
+
+## Hildreth-Lu
+
+```{r}
+rho = c(seq(0.1, 0.9, by = 0.1))
+
+hildreth.lu <- function(rho, model){
+x <- model.matrix (model) [, -1]
+y <- model.response (model.frame (model))
+n <- length(y)
+t <- 2:n
+y <- y[t] - rho * y[t-1]
+x <- x[t] - rho * x[t-1]
+return(lm(y ~ x))}
+```
+
+```{r}
+y <- gt$IPM
+x <- gt$Tahun
+
+tf <- lm(y ~ x)
+tab <- data.frame('rho' = rho,
+                  'SSE' = sapply(rho, function(r) {deviance(hildreth.lu(r, tf))}))
+round(tab, 4)
+```
+
+Berdasarkan metode Hildreth-Lu, diperoleh nilai $\rho$ yang menghasilkan SSE terkecil yaitu $\rho = 0.30$ dengan SSE = 0.2400. Namun untuk mencari estimasi yang lebih presisi, dilakukan pencarian lanjutan pada rentang $\rho = 0.30$ hingga $\rho = 0.40$ dengan increment 0.01.
+
+```{r}
+rho = c(seq(0.1, 0.3, by = 0.1), seq (0.30, 0.40, by=0.01))
+
+hildreth.lu <- function(rho, model){
+x <- model.matrix (model) [, -1]
+y <- model.response (model.frame (model))
+n <- length(y)
+t <- 2:n
+y <- y[t] - rho * y[t-1]
+x <- x[t] - rho * x[t-1]
+return(lm(y ~ x))}
+```
+
+```{r}
+y <- gt$IPM
+x <- gt$Tahun
+
+tf <- lm(y ~ x)
+tab <- data.frame('rho' = rho,
+                  'SSE' = sapply(rho, function(r) {deviance(hildreth.lu(r, tf))}))
+round(tab, 5)
+```
+
+Berdasarkan hasil tersebut tersebut, didapatkan nilai $\rho$ yang menghasilkan SSE terkecil yaitu $\rho = 0.34$ dengan 0.23975. Hal ini menunjukkan bahwa nilai $\rho = 0.34$ merupakan estimasi dengan presisi terbaik untuk mengoreksi autokorelasi pada model regresi sehingga model hasil transformasi bisa digunakan untuk menghasilkan model akhir.
+
+```{r}
+plot(SSE ~ rho, tab, type = 'l')
+abline(v = tab[tab$SSE == min(tab$SSE), 'rho'], lty = 3)
+```
+
+Berdasarkan grafik Hildreth-Lu dapat terlihat terlihat bahwa kurva memiliki titik minimum yang berada di sekitar $\rho = 0.34$. Hal ini selaran dengan hasil dari syntax sebelumnya
+
+```{r}
+tf <- hildreth.lu(0.34, tf)
+summary(tf)
+```
+
+```{r}
+dwtest(tf)
+```
+
+Setelah dilakukan transformasi Hildreth–Lu lalu dilakukan uji Durbin–Watson , diperoleh p-value = 0.09386 > 0.05, yang artinya tak tolak H0. sehingga metode Hildreth–Lu berhasil menangani masalah autokorelasi pada model.
+
+# Kesimpulan
+
+dataset IPM Gorontalo dari 2010 - 2021 memiliki autokorelasi ditandakan dengan p-value dari durbin-watson yang kurang dari 0.05, dan permasalah autokeorelasi tersebut dapat tertangani oleh metode cochcrane-orcutt maupun Hildreth–Lu dimana uji durbin-vatson menghasilkan p-value > 0.05
