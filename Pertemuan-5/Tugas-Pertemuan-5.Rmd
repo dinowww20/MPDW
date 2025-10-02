@@ -1,0 +1,162 @@
+---
+title: "Tugas Peretemuan 5"
+author: "Daffa Kyanfaiza G1401231078"
+date: "2025-10-02"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+```
+
+# LOad Dataset
+```{r}
+data <- read_excel("D:/KULIAH/SEM 5/MPDW/laporan_iklim_harian-250831182901.xlsx")
+
+dataset <- data[125:250, ]
+dataset$TAVG <- as.numeric(dataset$TAVG)
+dt1 <- ts(dataset$TAVG)
+```
+
+```{r}
+mean <- mean(dt1, na.rm = TRUE)
+mean
+```
+
+```{r}
+var(dt1)
+```
+
+# Pemeriksaan Kestasioneran
+## Plot Time Series
+
+```{r}
+plot1 <- dt1 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  geom_hline(yintercept = mean, color = "red", linetype = "dashed", size = 1) +
+  xlab("Obs") + ylab("TAVG")
+```
+```{r}
+plot1
+```
+Deret waktu suhu rata-rata (TAVG) pada observasi 125–250 berfluktuasi di sekitar rata-rata sekitar 26,8 tanpa menunjukkan adanya tren naik atau turun yang jelas. Pola yang relatif stabil di sekitar rataan ini mendukung indikasi bahwa data bersifat stasioner dalam rataan.
+
+## Cek stasioner dalam rataan
+```{r}
+acf(dt1)
+```
+Plot autokorelasi (ACF) menunjukkan korelasi yang signifikan pada lag kecil kemudian cepat meredam mendekati nol. Pola seperti ini konsisten dengan karakteristik data stasioner, di mana ketergantungan antarobservasi hanya terjadi dalam jangka pendek dan tidak berlanjut panjang.
+
+```{r}
+tseries::adf.test(dt1)
+```
+Uji Augmented Dickey-Fuller menghasilkan nilai statistik -4,3257 dengan p-value ≤ 0,05, sehingga hipotesis nol ditolak. Hal ini mengonfirmasi bahwa seri data bersifat stasioner dan tidak memerlukan transformasi differencing untuk mencapai kestasioneran.
+
+## Cek Stasioner dalam Ragam
+```{r}
+index <- seq(1:126)
+
+# Box-Cox
+bc <- boxcox(
+  dt1 ~ index,
+  lambda = seq(-1, 4, by = 0.01)
+)
+```
+
+```{r}
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+```
+
+```{r}
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+hasil di atas menunjukkan nilai λ optimum sebesar 1,92 dan selang kepercayaan 95% nilai memiliki batas bawah -1 dan batas atas 4. Selang tersebut memuat nilai satu sehingga dapat dikatakan bahwa data TAVG pada amatan 125-250 stasioner dalam ragam.
+
+# Split Data
+```{r}
+n <- length(dt1)             
+train_size <- floor(0.8 * n)  
+train <- dt1[1:train_size]
+test  <- dt1[(train_size+1):n]
+train <- ts(train)
+```
+data displit dengan proporsi train 80% dan test 20%, selanjutnya akan dilakukan pengecekan stasioneritas pada data train
+
+
+```{r}
+mean1 <- mean(train, na.rm = TRUE)
+mean1
+```
+
+```{r}
+var(train)
+```
+
+# Pengecekan Kestasioneran Data Train
+```{r}
+plot2 <- train |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  geom_hline(yintercept = mean1, color = "red", linetype = "dashed", size = 1) +
+  xlab("Obs") + ylab("TAVG")
+```
+```{r}
+plot2
+```
+Deret waktu suhu rata-rata (TAVG) pada data train berfluktuasi di sekitar rata-rata sekitar 26,92 tanpa menunjukkan adanya tren naik atau turun yang jelas. Pola yang relatif stabil di sekitar rataan ini mendukung indikasi bahwa data train bersifat stasioner dalam rataan.
+
+## Cek stasioner dalam rataan
+
+```{r}
+acf(train)
+```
+Plot autokorelasi (ACF) menunjukkan korelasi yang signifikan pada lag kecil kemudian cepat meredam mendekati nol. Pola seperti ini konsisten dengan karakteristik data stasioner, di mana ketergantungan antarobservasi hanya terjadi dalam jangka pendek dan tidak berlanjut panjang.
+
+```{r}
+tseries::adf.test(train)
+```
+Uji Augmented Dickey-Fuller menghasilkan nilai statistik -3.8711 dengan p-value 0.01826 ≤ 0,05, sehingga hipotesis nol ditolak. Hal ini mengonfirmasi bahwa seri data bersifat stasioner dan tidak memerlukan transformasi differencing untuk mencapai kestasioneran.
+
+## Cek Stasioner dalam Ragam
+```{r}
+index <- seq(1:(0.8*126))
+
+# Box-Cox
+bc2 <- boxcox(
+  train ~ index,
+  lambda = seq(-1, 4, by = 0.01)
+)
+```
+```{r}
+lambda2 <- bc2$x[which.max(bc2$y)]
+lambda2
+
+```
+
+```{r}
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc2$x[bc2$y > max(bc2$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+hasil di atas menunjukkan nilai λ optimum sebesar 3,85  dan selang kepercayaan 95% nilai memiliki batas bawah -1 dan batas atas 4. Selang tersebut memuat nilai satu sehingga dapat dikatakan bahwa data train stasioner dalam ragam.
+
+
+
+
